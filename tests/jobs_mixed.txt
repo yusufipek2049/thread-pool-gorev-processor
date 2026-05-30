@@ -1,0 +1,7 @@
+PRIME 17
+PRIME 100
+LINE_COUNT tests/sample1.txt
+FILE_HASH tests/sample1.txt
+LINE_COUNT tests/sample2.txt
+FILE_HASH tests/sample2.txt
+PRIME 999983

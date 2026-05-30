@@ -1,0 +1,5 @@
+*.o
+threadpool_app
+*.log
+.vscode/
+.DS_Store

@@ -1,0 +1,3 @@
+Bu dosya satir sayma testi icin kullanilir.
+Ikinci satir.
+Ucuncu satir.
