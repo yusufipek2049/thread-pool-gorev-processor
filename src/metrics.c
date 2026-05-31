@@ -9,7 +9,7 @@
 #define ANSI_COLOR_BLUE    "\x1b[34m"
 #define ANSI_COLOR_RESET   "\x1b[0m"
 #define ANSI_COLOR_BOLD    "\x1b[1m"
-static pthread_mutex_t g_metrics_mutex = PTHREAD_MUTEX_INITIALIZER;
+//static pthread_mutex_t g_metrics_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 typedef struct {
     int worker_count;
