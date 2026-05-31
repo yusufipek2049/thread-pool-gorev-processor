@@ -16,6 +16,7 @@ struct thread_pool {
     job_queue_t *queue;
     pthread_mutex_t shutdown_mutex;
     pthread_cond_t queue_not_empty;
+    pthread_cond_t queue_not_full;
 };
 
 static double elapsed_seconds(struct timespec start, struct timespec end)
@@ -37,34 +38,39 @@ static void *worker_thread_function(void *arg)
 
     while (1) {
         pthread_mutex_lock(&pool->shutdown_mutex);
-        
+
         while (job_queue_is_empty(pool->queue) && !pool->is_shutdown) {
             pthread_cond_wait(&pool->queue_not_empty, &pool->shutdown_mutex);
         }
-        
+
         if (pool->is_shutdown && job_queue_is_empty(pool->queue)) {
             pthread_mutex_unlock(&pool->shutdown_mutex);
             break;
         }
-        
+
+        if (job_queue_pop(pool->queue, &job) != 0) {
+            pthread_mutex_unlock(&pool->shutdown_mutex);
+            continue;
+        }
+
+        pthread_cond_signal(&pool->queue_not_full);
         pthread_mutex_unlock(&pool->shutdown_mutex);
-        
-        if (job_queue_pop(pool->queue, &job) == 0) {
-            logger_info("Worker processing: Job-%d (%s)", job.id, 
-                       job_type_to_string(job.type));
-            
-            clock_gettime(CLOCK_MONOTONIC, &start);
-            result = execute_job(&job);
-            clock_gettime(CLOCK_MONOTONIC, &end);
-            
-            duration = elapsed_seconds(start, end);
-            if (result == 0) {
-                logger_info("Job-%d completed successfully (%.3f s)", job.id, duration);
-                metrics_record_job_success(duration);
-            } else {
-                logger_error("Job-%d failed (%.3f s)", job.id, duration);
-                metrics_record_job_failure(duration);
-            }
+
+        logger_info("Worker processing: Job-%d (%s)",
+                    job.id,
+                    job_type_to_string(job.type));
+
+        clock_gettime(CLOCK_MONOTONIC, &start);
+        result = execute_job(&job);
+        clock_gettime(CLOCK_MONOTONIC, &end);
+
+        duration = elapsed_seconds(start, end);
+        if (result == 0) {
+            logger_info("Job-%d completed successfully (%.3f s)", job.id, duration);
+            metrics_record_job_success(duration);
+        } else {
+            logger_error("Job-%d failed (%.3f s)", job.id, duration);
+            metrics_record_job_failure(duration);
         }
     }
 
@@ -102,15 +108,24 @@ thread_pool_t *thread_pool_create(int worker_count, int queue_size)
 
     pool->worker_count = worker_count;
     pool->is_shutdown = 0;
-    
+
     if (pthread_mutex_init(&pool->shutdown_mutex, NULL) != 0) {
         free(pool->workers);
         job_queue_destroy(pool->queue);
         free(pool);
         return NULL;
     }
-    
+
     if (pthread_cond_init(&pool->queue_not_empty, NULL) != 0) {
+        pthread_mutex_destroy(&pool->shutdown_mutex);
+        free(pool->workers);
+        job_queue_destroy(pool->queue);
+        free(pool);
+        return NULL;
+    }
+
+    if (pthread_cond_init(&pool->queue_not_full, NULL) != 0) {
+        pthread_cond_destroy(&pool->queue_not_empty);
         pthread_mutex_destroy(&pool->shutdown_mutex);
         free(pool->workers);
         job_queue_destroy(pool->queue);
@@ -121,8 +136,8 @@ thread_pool_t *thread_pool_create(int worker_count, int queue_size)
     metrics_init(worker_count);
 
     for (i = 0; i < worker_count; i++) {
-        error = pthread_create(&pool->workers[i], NULL, 
-                             worker_thread_function, pool);
+        error = pthread_create(&pool->workers[i], NULL,
+                               worker_thread_function, pool);
         if (error != 0) {
             logger_error("Failed to create worker thread %d", i);
             pool->worker_count = i;
@@ -141,18 +156,29 @@ thread_pool_t *thread_pool_create(int worker_count, int queue_size)
 
 int thread_pool_submit(thread_pool_t *pool, job_t job)
 {
-    if (pool == NULL || pool->is_shutdown) {
+    if (pool == NULL) {
+        return -1;
+    }
+
+    pthread_mutex_lock(&pool->shutdown_mutex);
+
+    while (!pool->is_shutdown && job_queue_is_full(pool->queue)) {
+        pthread_cond_wait(&pool->queue_not_full, &pool->shutdown_mutex);
+    }
+
+    if (pool->is_shutdown) {
+        pthread_mutex_unlock(&pool->shutdown_mutex);
+        logger_error("Job-%d could not be queued: pool is shutting down", job.id);
         return -1;
     }
 
     if (job_queue_push(pool->queue, job) != 0) {
-        logger_error("Job-%d could not be queued (queue full)", job.id);
+        pthread_mutex_unlock(&pool->shutdown_mutex);
+        logger_error("Job-%d could not be queued", job.id);
         return -1;
     }
 
     logger_info("Job-%d submitted to queue: %s", job.id, job_type_to_string(job.type));
-
-    pthread_mutex_lock(&pool->shutdown_mutex);
     pthread_cond_signal(&pool->queue_not_empty);
     pthread_mutex_unlock(&pool->shutdown_mutex);
 
@@ -172,6 +198,7 @@ void thread_pool_shutdown(thread_pool_t *pool)
     pthread_mutex_lock(&pool->shutdown_mutex);
     pool->is_shutdown = 1;
     pthread_cond_broadcast(&pool->queue_not_empty);
+    pthread_cond_broadcast(&pool->queue_not_full);
     pthread_mutex_unlock(&pool->shutdown_mutex);
 
     for (i = 0; i < pool->worker_count; i++) {
@@ -190,6 +217,7 @@ void thread_pool_destroy(thread_pool_t *pool)
     }
 
     pthread_cond_destroy(&pool->queue_not_empty);
+    pthread_cond_destroy(&pool->queue_not_full);
     pthread_mutex_destroy(&pool->shutdown_mutex);
     job_queue_destroy(pool->queue);
     metrics_destroy();

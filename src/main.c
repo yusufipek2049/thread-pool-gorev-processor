@@ -1,18 +1,15 @@
 #include "job.h"
 #include "logger.h"
+#include "metrics.h"
 #include "thread_pool.h"
 
+#include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
 #include <unistd.h>
-#include <errno.h>
-
-#define ANSI_COLOR_GREEN   "\x1b[32m"
-#define ANSI_COLOR_CYAN    "\x1b[36m"
-#define ANSI_COLOR_BOLD    "\x1b[1m"
-#define ANSI_COLOR_RESET   "\x1b[0m"
 
 #define DEFAULT_WORKER_COUNT 4
 #define DEFAULT_QUEUE_SIZE 32
@@ -36,26 +33,24 @@ static void signal_handler(int sig)
 
 static void print_banner(void)
 {
-    printf("\n%s%s", ANSI_COLOR_BOLD, ANSI_COLOR_CYAN);
-    printf("╔═══════════════════════════════════════════════════╗\n");
-    printf("║                                                   ║\n");
-    printf("║         🚀 PARALEL GÖREV İŞLEYİCİ 🚀            ║\n");
-    printf("║      Thread Pool Tabanlı Görev Processor          ║\n");
-    printf("║                                                   ║\n");
-    printf("╚═══════════════════════════════════════════════════╝\n");
-    printf("%s\n", ANSI_COLOR_RESET);
+    printf("\nParalel Görev İşleyici\n");
+    printf("Thread Pool Tabanlı Görev Processor\n\n");
 }
 
 static void print_usage(const char *prog_name)
 {
-    printf("\n%sKullanım:%s\n", ANSI_COLOR_BOLD, ANSI_COLOR_RESET);
-    printf("  %s [SEÇENEKLER]\n\n", prog_name);
+    printf("\nKullanım:\n");
+    printf("  %s [SEÇENEKLER]\n", prog_name);
+    printf("  %s -t 4 -q 32 tests/jobs_mixed.txt\n\n", prog_name);
     printf("Seçenekler:\n");
-    printf("  --threads <N>       Worker thread sayısı (varsayılan: %d)\n", DEFAULT_WORKER_COUNT);
-    printf("  --queue-size <N>    İş kuyruğu kapasitesi (varsayılan: %d)\n", DEFAULT_QUEUE_SIZE);
-    printf("  --input <dosya>     Görevleri okunan dosya\n");
-    printf("  --help              Bu yardımı göster\n\n");
+    printf("  --threads, -t <N>       Worker thread sayısı (varsayılan: %d)\n", DEFAULT_WORKER_COUNT);
+    printf("  --queue-size, -q <N>    İş kuyruğu kapasitesi (varsayılan: %d)\n", DEFAULT_QUEUE_SIZE);
+    printf("  --input, -i <dosya>     Görevlerin okunacağı dosya\n");
+    printf("  --help, -h              Bu yardımı göster\n\n");
 }
+
+static int parse_int_range(const char *text, int min_value, int max_value, int *value);
+static int parse_positive_long(const char *text, long *value);
 
 static int parse_arguments(int argc, char *argv[], options_t *options)
 {
@@ -66,31 +61,29 @@ static int parse_arguments(int argc, char *argv[], options_t *options)
     memset(options->input_file, 0, sizeof(options->input_file));
 
     while (i < argc) {
-        if (strcmp(argv[i], "--threads") == 0) {
+        if (strcmp(argv[i], "--threads") == 0 || strcmp(argv[i], "-t") == 0) {
             if (i + 1 >= argc) {
-                logger_error("--threads için değer sağlanmalı");
+                logger_error("%s için değer sağlanmalı", argv[i]);
                 return -1;
             }
-            options->worker_count = atoi(argv[i + 1]);
-            if (options->worker_count <= 0 || options->worker_count > 64) {
+            if (parse_int_range(argv[i + 1], 1, 64, &options->worker_count) != 0) {
                 logger_error("Thread sayısı 1-64 arasında olmalı");
                 return -1;
             }
             i += 2;
-        } else if (strcmp(argv[i], "--queue-size") == 0) {
+        } else if (strcmp(argv[i], "--queue-size") == 0 || strcmp(argv[i], "-q") == 0) {
             if (i + 1 >= argc) {
-                logger_error("--queue-size için değer sağlanmalı");
+                logger_error("%s için değer sağlanmalı", argv[i]);
                 return -1;
             }
-            options->queue_size = atoi(argv[i + 1]);
-            if (options->queue_size <= 0 || options->queue_size > 4096) {
+            if (parse_int_range(argv[i + 1], 1, 4096, &options->queue_size) != 0) {
                 logger_error("Kuyruk kapasitesi 1-4096 arasında olmalı");
                 return -1;
             }
             i += 2;
-        } else if (strcmp(argv[i], "--input") == 0) {
+        } else if (strcmp(argv[i], "--input") == 0 || strcmp(argv[i], "-i") == 0) {
             if (i + 1 >= argc) {
-                logger_error("--input için dosya adı sağlanmalı");
+                logger_error("%s için dosya adı sağlanmalı", argv[i]);
                 return -1;
             }
             strncpy(options->input_file, argv[i + 1], sizeof(options->input_file) - 1);
@@ -98,6 +91,9 @@ static int parse_arguments(int argc, char *argv[], options_t *options)
         } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
             print_usage(argv[0]);
             return 1;
+        } else if (argv[i][0] != '-' && options->input_file[0] == '\0') {
+            strncpy(options->input_file, argv[i], sizeof(options->input_file) - 1);
+            i++;
         } else {
             logger_error("Bilinmeyen seçenek: %s", argv[i]);
             print_usage(argv[0]);
@@ -108,7 +104,38 @@ static int parse_arguments(int argc, char *argv[], options_t *options)
     return 0;
 }
 
-static int load_jobs_from_file(const char *filename, job_t *jobs, int max_jobs)
+static int parse_int_range(const char *text, int min_value, int max_value, int *value)
+{
+    char *endptr;
+    long parsed;
+
+    errno = 0;
+    parsed = strtol(text, &endptr, 10);
+    if (errno != 0 || endptr == text || *endptr != '\0' ||
+        parsed < min_value || parsed > max_value) {
+        return -1;
+    }
+
+    *value = (int)parsed;
+    return 0;
+}
+
+static int parse_positive_long(const char *text, long *value)
+{
+    char *endptr;
+    long parsed;
+
+    errno = 0;
+    parsed = strtol(text, &endptr, 10);
+    if (errno != 0 || endptr == text || *endptr != '\0' || parsed <= 0) {
+        return -1;
+    }
+
+    *value = parsed;
+    return 0;
+}
+
+static int load_jobs_from_file(const char *filename, job_t *jobs, int max_jobs, int *invalid_count)
 {
     FILE *file;
     int job_count = 0;
@@ -116,6 +143,10 @@ static int load_jobs_from_file(const char *filename, job_t *jobs, int max_jobs)
     char job_type_str[32];
     char param[256];
     int line_num = 0;
+
+    if (invalid_count != NULL) {
+        *invalid_count = 0;
+    }
 
     if (filename[0] == '\0') {
         logger_info("Örnek görevler kullanılıyor");
@@ -142,6 +173,9 @@ static int load_jobs_from_file(const char *filename, job_t *jobs, int max_jobs)
 
         if (sscanf(line, "%31s %255s", job_type_str, param) != 2) {
             logger_error("Geçersiz satır formatı (satır %d): %s", line_num, line);
+            if (invalid_count != NULL) {
+                (*invalid_count)++;
+            }
             continue;
         }
 
@@ -151,12 +185,18 @@ static int load_jobs_from_file(const char *filename, job_t *jobs, int max_jobs)
         }
 
         job_t new_job;
+        memset(&new_job, 0, sizeof(new_job));
         new_job.id = job_count + 1;
 
         if (strcmp(job_type_str, "PRIME") == 0) {
             new_job.type = JOB_PRIME_CHECK;
-            new_job.number = atol(param);
-            memset(new_job.path, 0, sizeof(new_job.path));
+            if (parse_positive_long(param, &new_job.number) != 0) {
+                logger_error("Geçersiz PRIME parametresi (satır %d): %s", line_num, param);
+                if (invalid_count != NULL) {
+                    (*invalid_count)++;
+                }
+                continue;
+            }
         } else if (strcmp(job_type_str, "LINE_COUNT") == 0) {
             new_job.type = JOB_LINE_COUNT;
             strncpy(new_job.path, param, sizeof(new_job.path) - 1);
@@ -167,6 +207,9 @@ static int load_jobs_from_file(const char *filename, job_t *jobs, int max_jobs)
             new_job.number = 0;
         } else {
             logger_error("Bilinmeyen görev tipi (satır %d): %s", line_num, job_type_str);
+            if (invalid_count != NULL) {
+                (*invalid_count)++;
+            }
             continue;
         }
 
@@ -181,7 +224,7 @@ static int load_jobs_from_file(const char *filename, job_t *jobs, int max_jobs)
 
     fclose(file);
     
-    if (job_count == 0) {
+    if (job_count == 0 && (invalid_count == NULL || *invalid_count == 0)) {
         logger_error("Dosyada geçerli görev bulunamadı: %s", filename);
         return -1;
     }
@@ -196,6 +239,7 @@ int main(int argc, char *argv[])
     thread_pool_t *pool = NULL;
     job_t jobs[MAX_JOBS];
     int job_count;
+    int invalid_job_count = 0;
     int i;
     int result;
     int exit_code = 0;
@@ -213,8 +257,8 @@ int main(int argc, char *argv[])
     logger_info("Yapılandırma: %d worker, kapasite %d", 
                 options.worker_count, options.queue_size);
 
-    job_count = load_jobs_from_file(options.input_file, jobs, MAX_JOBS);
-    if (job_count <= 0) {
+    job_count = load_jobs_from_file(options.input_file, jobs, MAX_JOBS, &invalid_job_count);
+    if (job_count < 0) {
         logger_error("Görev yüklenemedi");
         return 1;
     }
@@ -228,9 +272,17 @@ int main(int argc, char *argv[])
 
     g_pool = pool;
 
-    logger_info("═══════════════════════════════════════════════════");
+    for (i = 0; i < invalid_job_count; i++) {
+        metrics_record_job_failure(0.0);
+    }
+
+    if (invalid_job_count > 0) {
+        logger_error("%d geçersiz görev başarısız olarak kaydedildi", invalid_job_count);
+    }
+
+    logger_info("----------------------------------------");
     logger_info("%d görev kuyruğa ekleniyor...", job_count);
-    logger_info("═══════════════════════════════════════════════════");
+    logger_info("----------------------------------------");
 
     for (i = 0; i < job_count; i++) {
         if (g_interrupted) {
@@ -240,25 +292,24 @@ int main(int argc, char *argv[])
         
         if (thread_pool_submit(pool, jobs[i]) != 0) {
             logger_error("Görev %d gönderilemedi", i + 1);
+            metrics_record_job_failure(0.0);
             exit_code = 1;
         }
     }
 
-    logger_info("═══════════════════════════════════════════════════");
+    logger_info("----------------------------------------");
     logger_info("Tüm görevler gönderildi. Kapanış bekleniyor...");
-    logger_info("═══════════════════════════════════════════════════");
+    logger_info("----------------------------------------");
 
     thread_pool_shutdown(pool);
     thread_pool_destroy(pool);
     g_pool = NULL;
 
     if (g_interrupted) {
-        printf("\n%s⚠️  Program kullanıcı tarafından durduruldu%s\n", 
-               ANSI_COLOR_CYAN, ANSI_COLOR_RESET);
+        printf("\nProgram kullanıcı tarafından durduruldu\n");
         exit_code = 130; /* SIGINT exit code */
     } else {
-        logger_info("%s✓ Program başarılı şekilde tamamlandı%s",
-                    ANSI_COLOR_GREEN, ANSI_COLOR_RESET);
+        logger_info("Program başarılı şekilde tamamlandı");
     }
 
     return exit_code;

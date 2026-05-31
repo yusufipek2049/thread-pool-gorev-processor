@@ -1,18 +1,13 @@
 #include "logger.h"
 
+#include <pthread.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <time.h>
 
-#define ANSI_COLOR_GREEN   "\x1b[32m"
-#define ANSI_COLOR_BLUE    "\x1b[34m"
-#define ANSI_COLOR_YELLOW  "\x1b[33m"
-#define ANSI_COLOR_RED     "\x1b[31m"
-#define ANSI_COLOR_CYAN    "\x1b[36m"
-#define ANSI_COLOR_RESET   "\x1b[0m"
-#define ANSI_COLOR_BOLD    "\x1b[1m"
+static pthread_mutex_t g_logger_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-static void logger_write(FILE *stream, const char *level, const char *color, const char *format, va_list args)
+static void logger_write(FILE *stream, const char *level, const char *format, va_list args)
 {
     char time_buffer[32];
     time_t now;
@@ -22,11 +17,12 @@ static void logger_write(FILE *stream, const char *level, const char *color, con
     localtime_r(&now, &local_time);
     strftime(time_buffer, sizeof(time_buffer), "%H:%M:%S", &local_time);
 
-    fprintf(stream, "%s[%s]%s %s%-8s%s | ", 
-            ANSI_COLOR_CYAN, time_buffer, ANSI_COLOR_RESET,
-            color, level, ANSI_COLOR_RESET);
+    pthread_mutex_lock(&g_logger_mutex);
+    fprintf(stream, "[%s] [%s] ", time_buffer, level);
     vfprintf(stream, format, args);
     fprintf(stream, "\n");
+    fflush(stream);
+    pthread_mutex_unlock(&g_logger_mutex);
 }
 
 void logger_info(const char *format, ...)
@@ -34,7 +30,7 @@ void logger_info(const char *format, ...)
     va_list args;
 
     va_start(args, format);
-    logger_write(stdout, "INFO", ANSI_COLOR_GREEN, format, args);
+    logger_write(stdout, "INFO", format, args);
     va_end(args);
 }
 
@@ -43,7 +39,7 @@ void logger_error(const char *format, ...)
     va_list args;
 
     va_start(args, format);
-    logger_write(stderr, "ERROR", ANSI_COLOR_RED, format, args);
+    logger_write(stderr, "ERROR", format, args);
     va_end(args);
 }
 
@@ -52,6 +48,6 @@ void logger_debug(const char *format, ...)
     va_list args;
 
     va_start(args, format);
-    logger_write(stdout, "DEBUG", ANSI_COLOR_YELLOW, format, args);
+    logger_write(stdout, "DEBUG", format, args);
     va_end(args);
 }
