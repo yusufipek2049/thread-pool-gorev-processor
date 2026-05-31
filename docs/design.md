@@ -203,16 +203,19 @@ static int is_prime(long number) {
 - Throughput (jobs/second)
 
 **Rapor Formatı:**
-```
-╔════════════════════════════════════════╗
-║   📊 PERFORMANS RAPORU 📊             ║
-║ Worker Sayısı:          4            ║
-║ Toplam İş:             15            ║
-║ ✓ Başarılı:            15            ║
-║ Başarı Oranı:      100% [████] 100% ║
-│ İş/Saniye:         926.34 İş/s      ║
-╚════════════════════════════════════════╝
-```
+
+    ┌──────────────────────────────────────────────────────┐
+    │              📊 PERFORMANS RAPORU 📊               │
+    ├──────────────────────────────────────────────────────┤
+    │ Worker Sayısı:              4                     │
+    │ Toplam İş:                  15                    │
+    │ ✓ Başarılı:                 15                    │
+    │ ✗ Başarısız:                0                     │
+    │ Başarı Oranı:               100%                   │
+    │ Toplam İş Süresi (CPU):     0.0162 saniye           │
+    │ Ortalama Süre:              0.0011 saniye           │
+    │ İş/Saniye (1/Ort.):         926.34 İş/s             │
+    └──────────────────────────────────────────────────────┘
 
 ## Senkronizasyon Mekanizması
 
