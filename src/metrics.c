@@ -1,6 +1,15 @@
 #include "metrics.h"
 
 #include <stdio.h>
+#include <math.h>
+
+#define ANSI_COLOR_GREEN   "\x1b[32m"
+#define ANSI_COLOR_RED     "\x1b[31m"
+#define ANSI_COLOR_YELLOW  "\x1b[33m"
+#define ANSI_COLOR_CYAN    "\x1b[36m"
+#define ANSI_COLOR_BLUE    "\x1b[34m"
+#define ANSI_COLOR_RESET   "\x1b[0m"
+#define ANSI_COLOR_BOLD    "\x1b[1m"
 
 typedef struct {
     int worker_count;
@@ -38,19 +47,33 @@ void metrics_record_job_failure(double duration_seconds)
 void metrics_print_report(void)
 {
     double average = 0.0;
+    double throughput = 0.0;
+    int success_percent = 0;
 
     if (g_metrics.total_jobs > 0) {
         average = g_metrics.total_job_time / (double)g_metrics.total_jobs;
+        success_percent = (g_metrics.successful_jobs * 100) / g_metrics.total_jobs;
+        if (g_metrics.total_job_time > 0.0) {
+            throughput = (double)g_metrics.total_jobs / g_metrics.total_job_time;
+        }
     }
 
-    printf("\nPerformans Raporu\n");
-    printf("-----------------\n");
-    printf("Worker sayisi: %d\n", g_metrics.worker_count);
-    printf("Toplam is sayisi: %d\n", g_metrics.total_jobs);
-    printf("Basarili is sayisi: %d\n", g_metrics.successful_jobs);
-    printf("Basarisiz is sayisi: %d\n", g_metrics.failed_jobs);
-    printf("Toplam is suresi: %.6f saniye\n", g_metrics.total_job_time);
-    printf("Ortalama is suresi: %.6f saniye\n\n", average);
+    printf("\n");
+    printf("┌──────────────────────────────────────────────────────┐\n");
+    printf("│              📊 PERFORMANS RAPORU 📊               │\n");
+    printf("├──────────────────────────────────────────────────────┤\n");
+    printf("│ Worker Sayısı:              %d                     │\n", g_metrics.worker_count);
+    printf("│ Toplam İş:                  %d                     │\n", g_metrics.total_jobs);
+    printf("│ %s✓ Başarılı%s:                  %d                     │\n", 
+           ANSI_COLOR_GREEN, ANSI_COLOR_RESET, g_metrics.successful_jobs);
+    printf("│ %s✗ Başarısız%s:                  %d                     │\n", 
+           ANSI_COLOR_RED, ANSI_COLOR_RESET, g_metrics.failed_jobs);
+    printf("│ Başarı Oranı:               %d%%                   │\n", success_percent);
+    printf("│ Toplam Süre:                %.4f saniye           │\n", g_metrics.total_job_time);
+    printf("│ Ortalama Süre:              %.4f saniye           │\n", average);
+    printf("│ İş/Saniye (Throughput):     %.2f İş/s             │\n", throughput);
+    printf("└──────────────────────────────────────────────────────┘\n");
+    printf("\n");
 }
 
 void metrics_destroy(void)
