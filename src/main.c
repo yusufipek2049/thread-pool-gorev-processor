@@ -20,7 +20,7 @@
 
 static volatile sig_atomic_t g_interrupted = 0;
 
-ThreadPool *g_pool = NULL;
+thread_pool_t *g_pool = NULL;
 
 typedef struct {
     int worker_count;
