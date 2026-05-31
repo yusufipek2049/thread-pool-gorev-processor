@@ -189,9 +189,8 @@ static int is_prime(long number) {
 - `logger_debug()` - Sarı renk, debug mesajları
 
 **Çıktı Formatı:**
-```
-[HH:MM:SS] [LEVEL] | Message text
-```
+
+    [HH:MM:SS] LEVEL | Message text
 
 ### 7. **metrics.c** - Performans Metriği
 **Toplanan Veriler:**
