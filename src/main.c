@@ -255,7 +255,7 @@ int main(int argc, char *argv[])
                ANSI_COLOR_CYAN, ANSI_COLOR_RESET);
         exit_code = 130; /* SIGINT exit code */
     } else {
-        logger_info("%s✓ Program başarılı şekilde tamamlandı%s\n", 
+        logger_info("%s✓ Program başarılı şekilde tamamlandı%s",
                     ANSI_COLOR_GREEN, ANSI_COLOR_RESET);
     }
 
