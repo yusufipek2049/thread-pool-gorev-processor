@@ -1,0 +1,17 @@
+# Stress Test - Birçok PRIME görevleri
+PRIME 2
+PRIME 17
+PRIME 97
+PRIME 541
+PRIME 999983
+PRIME 1234567
+PRIME 9999991
+PRIME 104729
+LINE_COUNT tests/sample1.txt
+FILE_HASH tests/sample2.txt
+# Daha fazla görev
+PRIME 13
+PRIME 29
+PRIME 61
+LINE_COUNT tests/sample2.txt
+FILE_HASH tests/sample1.txt
