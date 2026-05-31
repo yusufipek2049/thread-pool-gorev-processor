@@ -109,21 +109,26 @@ Boş satırlar ve `#` ile başlayan yorum satırları atlanır. Geçersiz satır
 
 ## Testler
 
-Şimdilik `make test` temel çalışma kontrolü yapar:
+Projeye eklenmiş olan unit test ve entegrasyon testlerini çalıştırmak için `make test` komutunu kullanabilirsiniz. Bu komut hem `test_runner` uygulamasını derler ve çalıştırır, hem de ana uygulamayı farklı senaryolarla test eder:
 
 ```bash
 make test
 ```
 
-Elle denenebilecek örnekler:
+Sadece unit testleri (job_queue, tasks vb.) izole olarak derleyip çalıştırmak isterseniz:
+
+```bash
+make test_runner
+./test_runner
+```
+
+Elle denenebilecek örnek senaryolar:
 
 ```bash
 ./threadpool_app --input tests/jobs_small.txt
 ./threadpool_app --threads 4 --queue-size 32 --input tests/jobs_mixed.txt
 ./threadpool_app -t 4 -q 1 tests/jobs_mixed.txt
 ```
-
-Ayrıntılı test hedefleri ekip test dosyalarını tamamladıktan sonra Makefile içine eklenecektir.
 
 ## Performans Değerlendirmesi
 
