@@ -165,16 +165,18 @@ $ ./threadpool_app
 [11:36:17] INFO     | 4 görev kuyruğa ekleniyor...
 [11:36:17] INFO     | ✓ Program başarılı şekilde tamamlandı
 
-╔════════════════════════════════════════════════╗
-║      📊 PERFORMANS RAPORU 📊        ║
-╠════════════════════════════════════════════════╣
-║ Worker Sayısı:          4                   ║
-║ Toplam İş:              4                   ║
-║ ✓ Başarılı:             4                  ║
-║ Başarı Oranı:        100%  [██████████] 100.0% ║
-║ Toplam Süre:         0.0052 saniye         ║
-║ İş/Saniye (Throughput): 762.38 İş/s        ║
-╚════════════════════════════════════════════════╝
+┌──────────────────────────────────────────────────────┐
+│              📊 PERFORMANS RAPORU 📊               │
+├──────────────────────────────────────────────────────┤
+│ Worker Sayısı:              4                     │
+│ Toplam İş:                  4                     │
+│ ✓ Başarılı:                 4                     │
+│ ✗ Başarısız:                0                     │
+│ Başarı Oranı:               100%                   │
+│ Toplam İş Süresi (CPU):     0.0052 saniye           │
+│ Ortalama Süre:              0.0013 saniye           │
+│ İş/Saniye (1/Ort.):         762.38 İş/s             │
+└──────────────────────────────────────────────────────┘
 ```
 
 ### Test 2: Custom Yapılandırma
