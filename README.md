@@ -1,306 +1,165 @@
-# Paralel Görev İşleyici 🚀
+# Paralel Görev İşleyici
 
-**Thread Pool Tabanlı Paralel Görev İşleyici** - C dilinde POSIX/Linux API kullanarak geliştirilmiş, performans odaklı bir sistem.
+Bu proje, C dili ve POSIX/Linux API kullanılarak geliştirilen thread pool tabanlı bir görev işleyici örneğidir. Amaç, ortak bir iş kuyruğuna eklenen işleri birden fazla worker thread ile çalıştırmak ve bunu yaparken senkronizasyon, hata yönetimi ve basit performans ölçümü gibi sistem programlama konularını uygulamalı olarak göstermektir.
 
-## 📋 Özellikler
+Bu branch, başlangıç iskeletinin üstüne gerçek worker thread döngüsü, condition variable ile bekleme/uyandırma, dosyadan görev okuma ve temel metrik raporu ekler. Kod hâlâ ders projesi kapsamındadır; ilerleyen aşamada test senaryoları ve performans raporu genişletilecektir.
 
-- ✅ **Çoklu Worker Thread'ler**: Yapılandırılabilir sayıda worker thread
-- ✅ **FIFO İş Kuyruğu**: Pthread mutex ile korunan ortak kuyruk
-- ✅ **Condition Variable**: Efficient bekleme/uyandırma mekanizması
-- ✅ **Graceful Shutdown**: Kontrollü kapanış ve kaynak temizliği
-- ✅ **3 İş Türü**: 
-  - `PRIME_CHECK`: Asal sayı kontrolü
-  - `LINE_COUNT`: Dosyadaki satır sayımı
-  - `FILE_HASH`: Basit dosya hash'i
-- ✅ **Renkli Terminal Çıktısı**: ANSI renk desteği
-- ✅ **Gelişmiş Performans Raporu**: Throughput, başarı oranı, zaman ölçümü
-- ✅ **CLI Argümanları**: `--threads`, `--queue-size`, `--input`
-- ✅ **Hata Yönetimi**: Dosya hatası, geçersiz parametre, SIGINT (Ctrl+C) işleme
+## Amaç
 
-## 🛠️ Teknik Detaylar
+Program, girdi dosyasından okunan görevleri FIFO mantığıyla çalışan ortak bir kuyruğa ekler. Worker thread'ler bu kuyruktan görev alır, görevin tipine göre ilgili fonksiyonu çalıştırır ve sonucu loglar.
 
-### Sistem Mimarisi
+Bu çalışmada özellikle şu konular hedeflenir:
 
-```
-┌─────────────────────────────────────────────────┐
-│            ANA THREAD (main)                     │
-│  - CLI argümanları parse                         │
-│  - Dosyadan işleri yükle                         │
-│  - Thread pool başlat                            │
-│  - İşleri kuyruğa gönder                         │
-└─────────────────────────────────────────────────┘
-                      ↓
-        ┌─────────────────────────────────┐
-        │   ORTAK İŞ KUYRUĞU (FIFO)       │
-        │   Mutex ile korunmuş             │
-        └─────────────────────────────────┘
-                      ↓
-   ┌──────────┬──────────┬──────────┬──────────┐
-   ↓          ↓          ↓          ↓          ↓
-[Worker-0] [Worker-1] [Worker-2] [Worker-3] ... [Worker-N]
-   │          │          │          │          │
-   └──────────┴──────────┴──────────┴──────────┘
-                      ↓
-        ┌─────────────────────────────────┐
-        │    PERFORMANS METRİKLERİ        │
-        │  - İş süresi                    │
-        │  - Başarı/Başarısızlık          │
-        │  - Throughput (İş/saniye)       │
-        └─────────────────────────────────┘
-```
+- `pthread` ile worker thread oluşturma
+- Mutex ile paylaşılan veriyi koruma
+- Condition variable ile busy waiting yapmadan bekleme
+- Producer-consumer modelini uygulama
+- Dosya okuma, hata kontrolü ve kaynak temizliği
+- Program sonunda kısa bir performans özeti üretme
 
-### Veri Yapıları
+## Tasarım
 
-**Job (İş) Modeli:**
-```c
-typedef struct {
-    int id;              // İş kimliği
-    job_type_t type;     // PRIME_CHECK, LINE_COUNT, FILE_HASH
-    char path[256];      // Dosya yolu (dosya işleri için)
-    long number;         // Sayısal parametre (PRIME için)
-} job_t;
-```
+Uygulama dört ana parçadan oluşur:
 
-**Thread Pool:**
-- `pthread_t *workers` - Worker thread array'ı
-- `job_queue_t *queue` - Ortak FIFO kuyruğu
-- `pthread_mutex_t shutdown_mutex` - Senkronizasyon
-- `pthread_cond_t queue_not_empty` - Bekleme sinyali
+- `main.c`: Komut satırı argümanlarını okur, görev dosyasını parse eder, thread pool'u başlatır ve kapanışı yönetir.
+- `thread_pool.c`: Worker thread'leri oluşturur, görev kabul eder, kuyruğu worker'lara dağıtır ve shutdown sürecini yürütür.
+- `job_queue.c`: FIFO kuyruk işlemlerini sağlar.
+- `tasks.c`: Desteklenen görev tiplerini çalıştırır.
 
-**Job Queue (Circular Buffer):**
-- Mutex ile korunan circular FIFO
-- Push/pop işlemleri atomik
-- İş kalmadığında condition variable'de bekleme
+Worker thread'ler kuyruk boşken condition variable üzerinde bekler. Yeni görev eklendiğinde bir worker uyandırılır. Kapanış sırasında tüm worker'lara sinyal gönderilir, kuyrukta kalan işler tamamlanır ve thread'ler `pthread_join()` ile beklenir.
 
-## 📦 Kullanım
+Kuyruk dolu olduğunda görev düşürülmez. `thread_pool_submit()` kuyrukta yer açılmasını bekler. Böylece kullanıcı kaç görev verdiyse raporda da o görevlerin karşılığı izlenebilir.
 
-### Derleme
+## Kullanılan Sistem Programlama Kavramları
+
+- `pthread_create()` ve `pthread_join()`
+- `pthread_mutex_t`
+- `pthread_cond_t`
+- Producer-consumer modeli
+- FIFO circular buffer
+- File I/O
+- `clock_gettime()` ile süre ölçümü
+- Thread-safe loglama ve metrik güncelleme
+- Graceful shutdown
+
+## Kurulum
+
+Linux veya POSIX uyumlu bir ortamda `gcc`, `make` ve pthread desteği yeterlidir.
 
 ```bash
-# Proje klasörüne gidin
-cd thread-pool-gorev-processor
-
-# Derleyin
 make
-
-# Temizle
-make clean
 ```
 
-### Çalıştırma
+Derleme sonunda proje kökünde `threadpool_app` dosyası oluşur.
 
-#### Default Yapılandırma (4 worker)
+## Çalıştırma Adımları
+
+Varsayılan örnek görevlerle çalıştırmak için:
+
 ```bash
 ./threadpool_app
 ```
 
-#### Custom Yapılandırma
+Girdi dosyası ile çalıştırmak için:
+
 ```bash
-./threadpool_app --threads 8 --queue-size 64 --input tasks.txt
+./threadpool_app --threads 4 --queue-size 32 --input tests/jobs_mixed.txt
 ```
 
-#### Yardım
+Kısa kullanım da desteklenir:
+
+```bash
+./threadpool_app -t 4 -q 32 tests/jobs_mixed.txt
+```
+
+Yardım çıktısı:
+
 ```bash
 ./threadpool_app --help
 ```
 
-### Komut Satırı Seçenekleri
+## Girdi Dosyası Formatı
 
-| Seçenek | Açıklama | Varsayılan |
-|---------|----------|-----------|
-| `--threads <N>` | Worker thread sayısı (1-64) | 4 |
-| `--queue-size <N>` | İş kuyruğu kapasitesi (1-4096) | 32 |
-| `--input <dosya>` | Görevleri okunan dosya | Örnek görevler |
-| `--help, -h` | Yardımı göster | - |
+Her satır bir görevi temsil eder:
 
-## 📝 Girdi Dosyası Formatı
-
-Dosya satır satır görevleri içerir. Format: `GÖREV_TİPİ PARAMETRE`
-
-**Örnek (jobs_mixed.txt):**
 ```text
-# Asal sayı kontrolü
-PRIME 17
+<GOREV_TIPI> <PARAMETRE>
+```
+
+Örnek:
+
+```text
 PRIME 999983
-
-# Dosya satır sayımı
 LINE_COUNT tests/sample1.txt
-
-# Dosya hash'eme
 FILE_HASH tests/sample2.txt
-
-# Daha fazla işler
 PRIME 1234567
 ```
 
-**Destek Gören Görev Tipleri:**
-- `PRIME <sayı>` - Asal sayı kontrolü
-- `LINE_COUNT <dosya>` - Dosyadaki satır sayısı
-- `FILE_HASH <dosya>` - Dosya hash değeri
+Boş satırlar ve `#` ile başlayan yorum satırları atlanır. Geçersiz satırlar programı durdurmaz; hata olarak loglanır ve metriklerde başarısız görev olarak sayılır.
 
-**Notlar:**
-- Boş satırlar otomatikman atlanır
-- `#` ile başlayan satırlar yorum olarak işlenir
-- Geçersiz satırlar hata loglanır ve atlanır
-- Maksimum 1024 görev desteklenebilir
+## Desteklenen İş Tipleri
 
-## 💡 Örnek Çalıştırmalar
+| İş Tipi | Açıklama |
+|---|---|
+| `PRIME` | Verilen pozitif tam sayının asal olup olmadığını kontrol eder. |
+| `LINE_COUNT` | Verilen dosyadaki satır sayısını hesaplar. |
+| `FILE_HASH` | Verilen dosya için basit bir hash değeri üretir. |
 
-### Test 1: Default Örnek Görevler
+`PRIME` görevlerinde sayı doğrulaması yapılır. Örneğin `PRIME abc` geçerli kabul edilmez; `abc` değeri `0` gibi yorumlanıp başarılı görev sayılmaz.
+
+## Testler
+
+Şimdilik `make test` temel çalışma kontrolü yapar:
+
 ```bash
-$ ./threadpool_app
+make test
 ```
 
-**Çıktı:**
-```
-╔═══════════════════════════════════════════════════╗
-║         🚀 PARALEL GÖREV İŞLEYİCİ 🚀            ║
-║      Thread Pool Tabanlı Görev Processor          ║
-╚═══════════════════════════════════════════════════╝
+Elle denenebilecek örnekler:
 
-[11:36:17] INFO     | Yapılandırma: 4 worker, kapasite 32
-[11:36:17] INFO     | Örnek görevler kullanılıyor
-[11:36:17] INFO     | Thread pool oluşturuluyor...
-...
-[11:36:17] INFO     | 4 görev kuyruğa ekleniyor...
-[11:36:17] INFO     | ✓ Program başarılı şekilde tamamlandı
-
-┌──────────────────────────────────────────────────────┐
-│              📊 PERFORMANS RAPORU 📊               │
-├──────────────────────────────────────────────────────┤
-│ Worker Sayısı:              4                     │
-│ Toplam İş:                  4                     │
-│ ✓ Başarılı:                 4                     │
-│ ✗ Başarısız:                0                     │
-│ Başarı Oranı:               100%                   │
-│ Toplam İş Süresi (CPU):     0.0052 saniye           │
-│ Ortalama Süre:              0.0013 saniye           │
-│ İş/Saniye (1/Ort.):         762.38 İş/s             │
-└──────────────────────────────────────────────────────┘
-```
-
-### Test 2: Custom Yapılandırma
 ```bash
-$ ./threadpool_app --threads 2 --queue-size 16 --input tests/jobs_mixed.txt
+./threadpool_app --input tests/jobs_small.txt
+./threadpool_app --threads 4 --queue-size 32 --input tests/jobs_mixed.txt
+./threadpool_app -t 4 -q 1 tests/jobs_mixed.txt
 ```
 
-**Sonuç:** 7 görev, 2 worker ile 0.0116 saniyede tamamlandi
+Ayrıntılı test hedefleri ekip test dosyalarını tamamladıktan sonra Makefile içine eklenecektir.
 
-### Test 3: Stress Test
-```bash
-$ ./threadpool_app --threads 4 --queue-size 32 --input tests/jobs_stress.txt
-```
+## Performans Değerlendirmesi
 
-**Sonuç:** 15 görev, 4 worker ile **926 İş/saniye** throughput!
+Program sonunda şu bilgiler raporlanır:
 
-## 🔧 Proje Yapısı
+- Worker sayısı
+- Toplam iş sayısı
+- Başarılı iş sayısı
+- Başarısız iş sayısı
+- Başarı oranı
+- Toplam iş süresi
+- Ortalama iş süresi
+- Saniye başına iş sayısı
 
-```
-thread-pool-gorev-processor/
-├── include/              # Header dosyaları
-│   ├── job.h            # Job veri modeli
-│   ├── job_queue.h      # FIFO kuyruğu
-│   ├── thread_pool.h    # Thread pool arayüzü
-│   ├── tasks.h          # Görev işleyici
-│   ├── logger.h         # Loglama
-│   └── metrics.h        # Performans metriği
-├── src/                  # Kaynak dosyaları
-│   ├── main.c           # Ana program
-│   ├── thread_pool.c    # Thread pool implementasyonu
-│   ├── job_queue.c      # FIFO implementasyonu
-│   ├── job.c            # Job yardımcıları
-│   ├── tasks.c          # Görev işleyiciler (PRIME, LINE_COUNT, FILE_HASH)
-│   ├── logger.c         # Loglama implementasyonu
-│   └── metrics.c        # Metrik toplama
-├── tests/               # Test dosyaları
-│   ├── jobs_small.txt
-│   ├── jobs_mixed.txt
-│   ├── jobs_stress.txt
-│   ├── sample1.txt
-│   └── sample2.txt
-├── Makefile             # Derleme kuralları
-└── README.md            # Bu dosya
-```
+Daha ayrıntılı performans tablosu `docs/performance.md` içinde farklı worker sayılarıyla doldurulacaktır.
 
-## 🔐 Senkronizasyon Mekanizması
+## Takım Rol Dağılımı
 
-### Mutex Kullanımı
-- **İş Kuyruğu**: `pthread_mutex_t` ile push/pop işlemleri korunmuş
-- **Shutdown Durumu**: İş işleme sırasında shutdown kontrolü
+| Rol | Sorumluluk |
+|---|---|
+| Proje lideri / entegrasyon | `main.c`, `Makefile`, genel akış |
+| Thread pool sorumlusu | `thread_pool.c`, worker döngüsü, shutdown |
+| Kuyruk ve job modeli sorumlusu | `job_queue.c`, `job.c`, ilgili header dosyaları |
+| Görevler, loglama ve metrikler | `tasks.c`, `logger.c`, `metrics.c`, test girdileri |
 
-### Condition Variable
-- **queue_not_empty**: Kuyruk boş olduğunda worker'lar uyutulur
-- Signal/Broadcast: Yeni iş gelince worker'lar uyandırılır
-- Graceful Shutdown: Tüm worker'lara broadcast gönderilir
+## Son Düzenlemeler
 
-### Producer-Consumer Modeli
-- **Producer** (main thread): İşleri kuyruğa ekle
-- **Consumer** (worker threads): İşleri kuyruğu oku ve işle
+Bu branch'te özellikle şu hatalar ele alındı:
 
-## 📊 Performans Özellikleri
-
-Tested Configuration:
-- **Stress Test**: 15 görev, 4 worker
-- **Throughput**: 926 İş/saniye
-- **Ortalama İş Süresi**: 1.1 ms
-- **Başarı Oranı**: %100
-
-### Optimizasyon İpuçları
-```bash
-# Birçok I/O işi için daha fazla thread
-./threadpool_app --threads 8 --queue-size 64 --input large_file_tasks.txt
-
-# CPU-intensive işler için az thread
-./threadpool_app --threads 4 --queue-size 32 --input cpu_tasks.txt
-```
-
-## ⚠️ Hata Yönetimi
-
-Program şu hataları ele alır:
-
-- ❌ **Dosya Açılmadı**: `Dosya açılamadı: filename (No such file or directory)`
-- ❌ **Geçersiz Dosya Formatı**: `Geçersiz satır formatı (satır N): ...`
-- ❌ **Bilinmeyen Görev Tipi**: `Bilinmeyen görev tipi: TYPE`
-- ❌ **Geçersiz CLI Argümanı**: `Thread sayısı 1-64 arasında olmalı`
-- ⚠️ **SIGINT (Ctrl+C)**: Kalan işleri işlemeyi durdurur ve graceful shutdown başlatır
-
-## 🛠️ Geliştirici Notları
-
-### Eklenebilecek Özellikler
-1. İş önceliği (priority queue)
-2. Görev bağımlılıkları
-3. Uzaktan iş gönderimi (network)
-4. Persistent job storage (database)
-5. Job retry mekanizması
-6. Dinamik worker scaling
-
-### Debug Modu
-```bash
-# GDB ile debug
-gdb ./threadpool_app
-
-# Valgrind ile memory leak kontrolü
-valgrind --leak-check=full ./threadpool_app
-```
-
-## 📜 Lisans
-
-Bu proje eğitim amaçlı oluşturulmuştur.
-
-## 👨‍💻 Yazarlar
-
-- **Proje Lideri / Entegrasyon**: main.c, Makefile
-- **Thread Pool**: thread_pool.c, worker yaşam döngüsü
-- **İş Kuyruğu & Model**: job_queue.c, job.c
-- **Görevler & Loglama**: tasks.c, logger.c, metrics.c
-
----
-
-**Son Güncellenme**: 31 Mayıs 2026  
-**Versiyon**: 1.0 - Production Ready ✅
-
-Bu dağılım başlangıç önerisidir. Geliştirme sırasında ihtiyaçlara göre görev paylaşımı güncellenebilir.
+- Metrik sayaçları mutex ile korunur hale getirildi.
+- Log yazımı mutex ile seri hale getirildi.
+- Shutdown bayrağı kilit altında kontrol edildi.
+- Kuyruk doluyken görev düşürmek yerine boş yer bekleme mantığı eklendi.
+- `PRIME` parametreleri `strtol()` ile doğrulanır hale getirildi.
+- Geçersiz görev satırları başarısız iş olarak metriklere yansıtıldı.
 
 ## Karşılaşılan Problemler
 
-Bu bölüm geliştirme ve test süreci tamamlandıktan sonra doldurulacaktır.
+Geliştirme sırasında en önemli riskler race condition, log satırlarının birbirine karışması ve hatalı girdilerin başarılı görev gibi görünmesiydi. Bu branch'te bu noktalar temel seviyede düzeltildi. Kalan işler daha çok test kapsamının genişletilmesi ve performans metriklerinin ayrıntılandırılması tarafındadır.

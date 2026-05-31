@@ -1,15 +1,7 @@
 #include "metrics.h"
 
-#include <stdio.h>
 #include <pthread.h>
-#define ANSI_COLOR_GREEN   "\x1b[32m"
-#define ANSI_COLOR_RED     "\x1b[31m"
-#define ANSI_COLOR_YELLOW  "\x1b[33m"
-#define ANSI_COLOR_CYAN    "\x1b[36m"
-#define ANSI_COLOR_BLUE    "\x1b[34m"
-#define ANSI_COLOR_RESET   "\x1b[0m"
-#define ANSI_COLOR_BOLD    "\x1b[1m"
-//static pthread_mutex_t g_metrics_mutex = PTHREAD_MUTEX_INITIALIZER;
+#include <stdio.h>
 
 typedef struct {
     int worker_count;
@@ -20,67 +12,77 @@ typedef struct {
 } metrics_state_t;
 
 static metrics_state_t g_metrics;
+static pthread_mutex_t g_metrics_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 void metrics_init(int worker_count)
 {
+    pthread_mutex_lock(&g_metrics_mutex);
     g_metrics.worker_count = worker_count;
     g_metrics.total_jobs = 0;
     g_metrics.successful_jobs = 0;
     g_metrics.failed_jobs = 0;
     g_metrics.total_job_time = 0.0;
+    pthread_mutex_unlock(&g_metrics_mutex);
 }
 
 void metrics_record_job_success(double duration_seconds)
 {
+    pthread_mutex_lock(&g_metrics_mutex);
     g_metrics.total_jobs++;
     g_metrics.successful_jobs++;
     g_metrics.total_job_time += duration_seconds;
+    pthread_mutex_unlock(&g_metrics_mutex);
 }
 
 void metrics_record_job_failure(double duration_seconds)
 {
+    pthread_mutex_lock(&g_metrics_mutex);
     g_metrics.total_jobs++;
     g_metrics.failed_jobs++;
     g_metrics.total_job_time += duration_seconds;
+    pthread_mutex_unlock(&g_metrics_mutex);
 }
 
 void metrics_print_report(void)
 {
+    metrics_state_t snapshot;
     double average = 0.0;
     double throughput = 0.0;
     int success_percent = 0;
 
-    if (g_metrics.total_jobs > 0) {
-        average = g_metrics.total_job_time / (double)g_metrics.total_jobs;
-        success_percent = (g_metrics.successful_jobs * 100) / g_metrics.total_jobs;
-        if (g_metrics.total_job_time > 0.0) {
-            throughput = (double)g_metrics.total_jobs / g_metrics.total_job_time;
+    pthread_mutex_lock(&g_metrics_mutex);
+    snapshot = g_metrics;
+    pthread_mutex_unlock(&g_metrics_mutex);
+
+    if (snapshot.total_jobs > 0) {
+        average = snapshot.total_job_time / (double)snapshot.total_jobs;
+        success_percent = (snapshot.successful_jobs * 100) / snapshot.total_jobs;
+        if (snapshot.total_job_time > 0.0) {
+            throughput = (double)snapshot.total_jobs / snapshot.total_job_time;
         }
     }
 
     printf("\n");
-    printf("┌──────────────────────────────────────────────────────┐\n");
-    printf("│              📊 PERFORMANS RAPORU 📊               │\n");
-    printf("├──────────────────────────────────────────────────────┤\n");
-    printf("│ Worker Sayısı:              %d                     │\n", g_metrics.worker_count);
-    printf("│ Toplam İş:                  %d                     │\n", g_metrics.total_jobs);
-    printf("│ %s✓ Başarılı%s:                  %d                     │\n", 
-           ANSI_COLOR_GREEN, ANSI_COLOR_RESET, g_metrics.successful_jobs);
-    printf("│ %s✗ Başarısız%s:                  %d                     │\n", 
-           ANSI_COLOR_RED, ANSI_COLOR_RESET, g_metrics.failed_jobs);
-    printf("│ Başarı Oranı:               %d%%                   │\n", success_percent);
-    printf("│ Toplam İş Süresi (CPU):     %.4f saniye           │\n", g_metrics.total_job_time);
-    printf("│ Ortalama Süre:              %.4f saniye           │\n", average);
-    printf("│ İş/Saniye (1/Ort.):         %.2f İş/s             │\n", throughput);
-    printf("└──────────────────────────────────────────────────────┘\n");
+    printf("Performans Raporu\n");
+    printf("-----------------\n");
+    printf("Worker sayisi: %d\n", snapshot.worker_count);
+    printf("Toplam is: %d\n", snapshot.total_jobs);
+    printf("Basarili is: %d\n", snapshot.successful_jobs);
+    printf("Basarisiz is: %d\n", snapshot.failed_jobs);
+    printf("Basari orani: %d%%\n", success_percent);
+    printf("Toplam is suresi: %.4f saniye\n", snapshot.total_job_time);
+    printf("Ortalama is suresi: %.4f saniye\n", average);
+    printf("Is/saniye: %.2f\n", throughput);
     printf("\n");
 }
 
 void metrics_destroy(void)
 {
+    pthread_mutex_lock(&g_metrics_mutex);
     g_metrics.worker_count = 0;
     g_metrics.total_jobs = 0;
     g_metrics.successful_jobs = 0;
     g_metrics.failed_jobs = 0;
     g_metrics.total_job_time = 0.0;
+    pthread_mutex_unlock(&g_metrics_mutex);
 }
