@@ -18,8 +18,7 @@
 #define DEFAULT_QUEUE_SIZE 32
 #define MAX_JOBS 1024
 
-static thread_pool_t *g_pool = NULL;
-static volatile int g_interrupted = 0;
+static volatile sig_atomic_t g_interrupted = 0;
 
 typedef struct {
     int worker_count;
@@ -31,9 +30,6 @@ static void signal_handler(int sig)
 {
     (void)sig;
     g_interrupted = 1;
-    if (g_pool != NULL) {
-        logger_info("⚠️  Kapanış sinyali alındı (Ctrl+C). Lütfen bekleyin...");
-    }
 }
 
 static void print_banner(void)
