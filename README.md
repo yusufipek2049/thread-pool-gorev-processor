@@ -151,7 +151,8 @@ Projeye eklenmiş olan gelişmiş analiz hedefleri ile kodun dayanıklılığın
     make tsan
     ```
 
-        * WSL'de kullanmak için *
+    * WSL'de kullanmak için 
+
 
     ```bash
     setarch $(uname -m) -R make tsan
