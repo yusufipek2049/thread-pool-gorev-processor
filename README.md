@@ -2,7 +2,7 @@
 
 Bu proje, C dili ve POSIX/Linux API kullanılarak geliştirilen thread pool tabanlı bir görev işleyici örneğidir. Amaç, ortak bir iş kuyruğuna eklenen işleri birden fazla worker thread ile çalıştırmak ve bunu yaparken senkronizasyon, hata yönetimi ve basit performans ölçümü gibi sistem programlama konularını uygulamalı olarak göstermektir.
 
-Bu branch, başlangıç iskeletinin üstüne gerçek worker thread döngüsü, condition variable ile bekleme/uyandırma, dosyadan görev okuma ve metrik raporu ekler. Son test turunda unit testler, entegrasyon testi, Valgrind ve coverage ölçümü çalıştırıldı. Eski raporda ThreadSanitizer sonucu `Pass` olarak kayıtlıdır; güncel WSL2 tekrarında ise TSan runtime uyumsuzluğu nedeniyle analiz tamamlanamadı.
+Bu branch, başlangıç iskeletinin üstüne gerçek worker thread döngüsü, condition variable ile bekleme/uyandırma, dosyadan görev okuma ve metrik raporu ekler. Son test turunda unit testler, entegrasyon testi, Valgrind, ThreadSanitizer ve coverage ölçümü çalıştırıldı. ThreadSanitizer WSL2 ortamında `setarch $(uname -m) -R make tsan` komutuyla başarıyla tamamlandı.
 
 ## Amaç
 
@@ -148,18 +148,10 @@ Projeye eklenmiş olan gelişmiş analiz hedefleri ile kodun dayanıklılığın
 
 *   **Eşzamanlılık (Race Condition) Kontrolü (Thread Sanitizer):**
     ```bash
-    make tsan
+    setarch $(uname -m) -R make tsan
     ```
 
-    Kodu `-fsanitize=thread` bayrağıyla derler ve testleri TSan altında çalıştırır. Uygun Linux ortamında data race gibi eşzamanlılık hatalarını yakalamak için kullanılır.
-
-    Bu WSL2 ortamında test şu runtime hatasıyla tamamlanamadı:
-
-    ```text
-    FATAL: ThreadSanitizer: unexpected memory mapping
-    ```
-
-    Bu çıktı, kodda kesin bir data race bulunduğu anlamına gelmez. Eski raporda TSan `Pass` olarak kayıtlıdır; bu tekrar denemesinde ise testler başlamadan sanitizer runtime çöktüğü için güncel WSL2 sonucu ayrıca doğrulanamadı. Daha sağlıklı tekrar için native Linux, Linux VM veya farklı compiler/runtime kombinasyonu denenmelidir.
+    Kodu `-fsanitize=thread` bayrağıyla derler ve testleri TSan altında çalıştırır. WSL2'de normal `make tsan` bazı sistemlerde `unexpected memory mapping` hatası verebildiği için `setarch ... -R` ile ASLR kapatılarak çalıştırmak daha sağlıklı oldu. Son denemede TSan testleri geçti ve data race raporu üretilmedi.
 
 *   **Kod Kapsamı Ölçümü (Gcov Coverage):**
     ```bash
@@ -216,4 +208,4 @@ Bu branch'te özellikle şu hatalar ele alındı:
 
 ## Karşılaşılan Problemler
 
-Geliştirme sırasında en önemli riskler race condition, log satırlarının birbirine karışması ve hatalı girdilerin başarılı görev gibi görünmesiydi. Bu branch'te metrikler ve loglama mutex ile korunur hale getirildi, hatalı girdiler başarısız iş olarak sayıldı ve test kapsamı genişletildi. ThreadSanitizer için eski raporda `Pass` sonucu vardır; mevcut WSL2 ortamında tekrar doğrulama yapılamadığı için bu not ayrıca korunur.
+Geliştirme sırasında en önemli riskler race condition, log satırlarının birbirine karışması ve hatalı girdilerin başarılı görev gibi görünmesiydi. Bu branch'te metrikler ve loglama mutex ile korunur hale getirildi, hatalı girdiler başarısız iş olarak sayıldı ve test kapsamı genişletildi. ThreadSanitizer son turda `setarch $(uname -m) -R make tsan` ile başarıyla çalıştı.

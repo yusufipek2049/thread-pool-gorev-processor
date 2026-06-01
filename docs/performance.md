@@ -59,21 +59,20 @@ Valgrind hem `test_runner` hem de kısa entegrasyon testi üzerinde temiz geçti
 
 ## Thread Sanitizer
 
-Önceki test turunda ThreadSanitizer hedefi çalışmış ve rapora `Pass` olarak işlenmişti. O turdaki gelişmiş analiz özeti şöyleydi:
+ThreadSanitizer analizi WSL2 ortamında ASLR kapatılarak başarıyla çalıştırıldı:
 
-| Araç | Senaryo | Eski Sonuç |
-|---|---|---|
-| Thread Sanitizer | Eşzamanlılık / race condition kontrolü | Pass |
-
-Bu eski sonuç, o dönemde TSan altında belirgin bir race condition raporlanmadığını gösterir.
-
-ThreadSanitizer hedefi tekrar denendi, ancak bu WSL2 ortamında tamamlanamadı:
-
-```text
-FATAL: ThreadSanitizer: unexpected memory mapping
+```bash
+setarch $(uname -m) -R make tsan
 ```
 
-Bu hata testler başlamadan sanitizer runtime içinde oluşuyor. Bu yüzden güncel WSL2 turu eski `Pass` sonucunu geçersiz kılmaz; sadece bu ortamda yeni bir TSan doğrulaması yapılamadığını gösterir. Doğru yorum şu olmalıdır: geçmiş TSan turu `Pass`, güncel WSL2 tekrarında ise analiz runtime uyumsuzluğu nedeniyle tamamlanamadı.
+Normal `make tsan` komutu WSL2'de `unexpected memory mapping` hatası verebiliyordu. `setarch ... -R` ile adres alanı rastgeleleştirmesi kapatıldığında testler tamamlandı.
+
+| Araç | Senaryo | Sonuç |
+|---|---|---|
+| Thread Sanitizer | Unit testler | Pass |
+| Thread Sanitizer | `tests/jobs_mixed.txt` entegrasyon testi | Pass |
+
+TSan çalışması sırasında data race raporu üretilmedi. Bu nedenle bu test turu için ThreadSanitizer sonucu başarılı kabul edildi.
 
 ## Stres Testi
 
@@ -96,4 +95,4 @@ Programın raporladığı "toplam iş süresi" worker sürelerinin toplamıdır.
 
 ## Kısa Yorum
 
-Son test turunda fonksiyonel testler geçti, Valgrind temiz kaldı ve coverage anlamlı şekilde arttı. Stres testinde 10.000 iş kayıpsız tamamlandı. ThreadSanitizer için geçmiş raporda `Pass` sonucu var; ancak mevcut WSL2 ortamında aynı analiz tekrar çalıştırılamadığı için güncel doğrulama notu ayrıca tutuldu.
+Son test turunda fonksiyonel testler geçti, Valgrind temiz kaldı, ThreadSanitizer `setarch $(uname -m) -R make tsan` ile başarılı oldu ve coverage anlamlı şekilde arttı. Stres testinde 10.000 iş kayıpsız tamamlandı.
