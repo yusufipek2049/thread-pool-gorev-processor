@@ -1,0 +1,6 @@
+# Coverage input: comments, invalid rows, and valid rows together.
+
+PRIME abc
+UNKNOWN 123
+LINE_COUNT tests/sample1.txt
+FILE_HASH tests/sample2.txt

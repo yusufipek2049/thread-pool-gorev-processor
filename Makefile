@@ -9,7 +9,7 @@ OBJ := $(SRC:.c=.o)
 TEST_SRC := tests/test_runner.c src/job_queue.c src/tasks.c src/logger.c src/metrics.c src/job.c src/thread_pool.c
 TEST_OBJ := $(TEST_SRC:.c=.o)
 
-.PHONY: all run test clean build_test
+.PHONY: all run test clean build_test test_runner mixed_jobs_test stress_test valgrind tsan coverage
 
 all: $(TARGET)
 
@@ -25,11 +25,13 @@ tests/%.o: tests/%.c
 build_test: $(TEST_OBJ)
 	$(CC) $(CFLAGS) -o $(TEST_TARGET) $^ $(LDFLAGS)
 
+test_runner: build_test
+	./$(TEST_TARGET)
+
 run: $(TARGET)
 	./$(TARGET)
 
-test: $(TARGET) build_test
-	./$(TEST_TARGET)
+test: $(TARGET) test_runner
 	./$(TARGET) -t 4 -q 32 -i tests/jobs_mixed.txt
 
 mixed_jobs_test: $(TARGET)
@@ -42,6 +44,7 @@ stress_test: $(TARGET)
 
 valgrind: $(TARGET) build_test
 	@echo "\n=== RUNNING VALGRIND ==="
+	@command -v valgrind >/dev/null 2>&1 || { echo "valgrind bulunamadı"; exit 127; }
 	valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 ./$(TEST_TARGET)
 	valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 ./$(TARGET) -t 4 -q 32 -i tests/jobs_mixed.txt
 
@@ -58,7 +61,18 @@ coverage: clean $(TARGET) build_test
 	@echo "\n=== RUNNING COVERAGE ==="
 	./$(TEST_TARGET)
 	./$(TARGET) -t 4 -q 32 -i tests/jobs_mixed.txt
+	./$(TARGET) >/dev/null
+	./$(TARGET) --help >/dev/null
+	./$(TARGET) tests/jobs_mixed.txt >/dev/null
+	! ./$(TARGET) --unknown >/dev/null 2>&1
+	! ./$(TARGET) -t >/dev/null 2>&1
+	! ./$(TARGET) -t 0 -q 32 -i tests/jobs_mixed.txt >/dev/null 2>&1
+	! ./$(TARGET) -t abc -q 32 -i tests/jobs_mixed.txt >/dev/null 2>&1
+	! ./$(TARGET) -q 0 -i tests/jobs_mixed.txt >/dev/null 2>&1
+	! ./$(TARGET) -i >/dev/null 2>&1
+	! ./$(TARGET) -i tests/non_existent_file.txt >/dev/null 2>&1
+	./$(TARGET) -i tests/jobs_invalid_coverage.txt >/dev/null 2>&1
 	gcov src/*.c
 
 clean:
-	rm -f $(OBJ) $(TEST_OBJ) $(TARGET) $(TEST_TARGET) *.gcov *.gcda *.gcno
+	rm -f $(OBJ) $(TEST_OBJ) $(TARGET) $(TEST_TARGET) *.gcov *.gcda *.gcno src/*.gcda src/*.gcno tests/*.gcda tests/*.gcno

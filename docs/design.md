@@ -4,6 +4,8 @@
 
 **Paralel Görev İşleyici**, POSIX pthread API'sini kullanan multi-threaded bir C uygulamasıdır. Sistem, ortak bir FIFO kuyruğundan görevleri alıp, belirlenen sayıda worker thread tarafından paralel olarak işlenmesini sağlar.
 
+Tasarımın ana hedefi, producer-consumer modelini sade ve izlenebilir bir yapıyla göstermektir. Main thread görevleri üretir, worker thread'ler aynı kuyruğu tüketir, metrik ve log çıktıları ise thread-safe yardımcı modüller üzerinden yönetilir.
+
 ## Sistem Mimarisi
 
 ```
@@ -71,6 +73,7 @@ struct thread_pool {
     job_queue_t *queue;              // Ortak iş kuyruğu
     pthread_mutex_t shutdown_mutex;  // Senkronizasyon
     pthread_cond_t queue_not_empty;  // Bekleme sinyali
+    pthread_cond_t queue_not_full;   // Kuyrukta yer açılma sinyali
 };
 ```
 
@@ -79,7 +82,7 @@ struct thread_pool {
 | Fonksiyon | Amaç |
 |-----------|------|
 | `thread_pool_create()` | Worker thread'ler oluştur, mutex/cond_var başlat |
-| `thread_pool_submit()` | İşi kuyruğa gönder ve signal gönder |
+| `thread_pool_submit()` | İşi kuyruğa gönder; kuyruk doluysa yer açılmasını bekle |
 | `thread_pool_shutdown()` | Broadcast signal ve pthread_join() |
 | `thread_pool_destroy()` | Kaynakları temizle |
 | `worker_thread_function()` | Worker'ın sonsuz döngüsü |
@@ -90,10 +93,10 @@ while true:
     ├─ Lock shutdown_mutex
     ├─ While queue empty AND NOT shutdown:
     │  └─ pthread_cond_wait()
-    ├─ Unlock mutex
-    ├─
     ├─ If shutdown AND queue empty: break
     ├─ Pop from queue
+    ├─ Signal queue_not_full
+    ├─ Unlock mutex
     ├─ Execute job
     ├─ Record metrics
     └─ Repeat
@@ -126,17 +129,17 @@ Push Job-1:
   items[0] = Job-1
   rear = (0+1) % capacity = 1
   size = 1
-  
+
 Push Job-2:
   items[1] = Job-2
   rear = (1+1) % capacity = 2
   size = 2
-  
+
 Pop:
   return items[0] (Job-1)
   front = (0+1) % capacity = 1
   size = 1
-  
+
 Pop:
   return items[1] (Job-2)
   front = (1+1) % capacity = 2
@@ -174,10 +177,10 @@ static int is_prime(long number) {
     if (number < 2) return 0;
     if (number == 2) return 1;
     if (number % 2 == 0) return 0;
-    
+
     for (long d = 3; d * d <= number; d += 2)
         if (number % d == 0) return 0;
-    
+
     return 1;
 }
 ```
@@ -242,6 +245,7 @@ Worker Thread:
 
 Main Thread:
   ├─ Lock mutex
+  ├─ Queue full ise queue_not_full bekle
   ├─ Push job to queue
   ├─ pthread_cond_signal(&queue_not_empty)
   │  (Bir worker'ı uyandır)
@@ -350,6 +354,10 @@ Runtime Errors:
   └─ Memory allocation → Cleanup and exit
 ```
 
+## Test ve Doğrulama Notu
+
+Son test turunda unit testler, entegrasyon testi, Valgrind ve coverage ölçümü çalıştırıldı. Coverage `%85.48` seviyesine çıkarıldı ve Valgrind bellek sızıntısı raporlamadı. Eski raporda ThreadSanitizer sonucu `Pass` olarak kayıtlıdır. Mevcut WSL2 tekrarında ise TSan `unexpected memory mapping` hatasıyla test başlamadan durduğu için yeni doğrulama tamamlanamadı.
+
 ## Gelecek İyileştirmeler
 
 ### Kısa Vadeli
@@ -370,6 +378,6 @@ Runtime Errors:
 
 ---
 
-**Belge Sürümü**: 2.0  
-**Son Güncelleme**: 31 Mayıs 2026  
-**Durum**: Production Ready ✅
+**Belge Sürümü**: 2.1
+**Son Güncelleme**: 1 Haziran 2026
+**Durum**: Ders projesi için test edildi; eski TSan sonucu Pass, güncel WSL2 tekrarında TSan runtime uyumsuzluğu var.
