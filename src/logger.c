@@ -14,7 +14,11 @@ static void logger_write(FILE *stream, const char *level, const char *format, va
     struct tm local_time;
 
     now = time(NULL);
+#ifdef _WIN32
+    localtime_s(&local_time, &now);
+#else
     localtime_r(&now, &local_time);
+#endif
     strftime(time_buffer, sizeof(time_buffer), "%H:%M:%S", &local_time);
 
     pthread_mutex_lock(&g_logger_mutex);

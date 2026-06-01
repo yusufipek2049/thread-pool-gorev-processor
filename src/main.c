@@ -13,7 +13,7 @@
 
 #define DEFAULT_WORKER_COUNT 4
 #define DEFAULT_QUEUE_SIZE 32
-#define MAX_JOBS 1024
+#define MAX_JOBS 100000
 
 static volatile sig_atomic_t g_interrupted = 0;
 
@@ -165,7 +165,7 @@ static int load_jobs_from_file(const char *filename, job_t *jobs, int max_jobs, 
 
     while (fgets(line, sizeof(line), file) != NULL && job_count < max_jobs) {
         line_num++;
-        
+
         /* Boş satırları ve yorumları atla */
         if (line[0] == '#' || line[0] == '\n' || line[0] == '\r') {
             continue;
@@ -223,12 +223,12 @@ static int load_jobs_from_file(const char *filename, job_t *jobs, int max_jobs, 
     }
 
     fclose(file);
-    
+
     if (job_count == 0 && (invalid_count == NULL || *invalid_count == 0)) {
         logger_error("Dosyada geçerli görev bulunamadı: %s", filename);
         return -1;
     }
-    
+
     logger_info("Dosyadan %d görev yüklendi: %s", job_count, filename);
     return job_count;
 }
@@ -237,7 +237,7 @@ int main(int argc, char *argv[])
 {
     options_t options;
     thread_pool_t *pool = NULL;
-    job_t jobs[MAX_JOBS];
+    job_t *jobs = NULL;
     int job_count;
     int invalid_job_count = 0;
     int i;
@@ -254,20 +254,28 @@ int main(int argc, char *argv[])
         return result == 1 ? 0 : 1;
     }
 
-    logger_info("Yapılandırma: %d worker, kapasite %d", 
+    jobs = malloc(MAX_JOBS * sizeof(job_t));
+    if (jobs == NULL) {
+        logger_error("Bellek ayrılamadı (görevler için)");
+        return 1;
+    }
+
+    logger_info("Yapılandırma: %d worker, kapasite %d",
                 options.worker_count, options.queue_size);
 
     job_count = load_jobs_from_file(options.input_file, jobs, MAX_JOBS, &invalid_job_count);
     if (job_count < 0) {
         logger_error("Görev yüklenemedi");
-        return 1;
+        exit_code = 1;
+        goto cleanup;
     }
 
     logger_info("Thread pool oluşturuluyor...");
     pool = thread_pool_create(options.worker_count, options.queue_size);
     if (pool == NULL) {
         logger_error("Thread pool oluşturulamadı");
-        return 1;
+        exit_code = 1;
+        goto cleanup;
     }
 
     g_pool = pool;
@@ -289,7 +297,7 @@ int main(int argc, char *argv[])
             logger_info("Kullanıcı tarafından durduruldu. Kalan görevler işlenmeyecek.");
             break;
         }
-        
+
         if (thread_pool_submit(pool, jobs[i]) != 0) {
             logger_error("Görev %d gönderilemedi", i + 1);
             metrics_record_job_failure(0.0);
@@ -303,6 +311,7 @@ int main(int argc, char *argv[])
 
     thread_pool_shutdown(pool);
     thread_pool_destroy(pool);
+    pool = NULL;
     g_pool = NULL;
 
     if (g_interrupted) {
@@ -312,5 +321,13 @@ int main(int argc, char *argv[])
         logger_info("Program başarılı şekilde tamamlandı");
     }
 
+cleanup:
+    if (pool != NULL) {
+        thread_pool_shutdown(pool);
+        thread_pool_destroy(pool);
+        g_pool = NULL;
+    }
+
+    free(jobs);
     return exit_code;
 }

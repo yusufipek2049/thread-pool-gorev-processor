@@ -2,7 +2,7 @@
 
 Bu proje, C dili ve POSIX/Linux API kullanılarak geliştirilen thread pool tabanlı bir görev işleyici örneğidir. Amaç, ortak bir iş kuyruğuna eklenen işleri birden fazla worker thread ile çalıştırmak ve bunu yaparken senkronizasyon, hata yönetimi ve basit performans ölçümü gibi sistem programlama konularını uygulamalı olarak göstermektir.
 
-Bu branch, başlangıç iskeletinin üstüne gerçek worker thread döngüsü, condition variable ile bekleme/uyandırma, dosyadan görev okuma ve temel metrik raporu ekler. Kod hâlâ ders projesi kapsamındadır; ilerleyen aşamada test senaryoları ve performans raporu genişletilecektir.
+Bu branch, başlangıç iskeletinin üstüne gerçek worker thread döngüsü, condition variable ile bekleme/uyandırma, dosyadan görev okuma ve metrik raporu ekler. Son test turunda unit testler, entegrasyon testi, Valgrind ve coverage ölçümü çalıştırıldı. Eski raporda ThreadSanitizer sonucu `Pass` olarak kayıtlıdır; güncel WSL2 tekrarında ise TSan runtime uyumsuzluğu nedeniyle analiz tamamlanamadı.
 
 ## Amaç
 
@@ -109,21 +109,75 @@ Boş satırlar ve `#` ile başlayan yorum satırları atlanır. Geçersiz satır
 
 ## Testler
 
-Şimdilik `make test` temel çalışma kontrolü yapar:
+Projeye eklenmiş olan unit test ve entegrasyon testlerini çalıştırmak için `make test` komutunu kullanabilirsiniz. Bu komut hem `test_runner` uygulamasını derler ve çalıştırır, hem de ana uygulamayı farklı senaryolarla test eder:
 
 ```bash
 make test
 ```
 
-Elle denenebilecek örnekler:
+Sadece unit testleri (job_queue, tasks vb.) izole olarak derleyip çalıştırmak isterseniz:
 
 ```bash
-./threadpool_app --input tests/jobs_small.txt
+make test_runner
+./test_runner
+```
+
+### Entegrasyon ve Stres Testleri
+
+Eğer uygulamanın `jobs_mixed.txt` ve `jobs_stress.txt` dosyalarıyla gerçek bir yük altında nasıl çalıştığını görmek isterseniz, hazır olarak eklenmiş stres testi komutunu kullanabilirsiniz:
+
+```bash
+make stress_test
+```
+Bu komut, uygulamayı 8 worker ve 128 kuyruk kapasitesiyle `tests/jobs_stress.txt` dosyası üzerinde çalıştırır. Dosyada 10.000 görev vardır.
+
+```bash
+make mixed_jobs_test
+```
+Bu komut, küçük karışık görev dosyasıyla kısa bir entegrasyon testi yapar.
+
+### Gelişmiş Test ve Analiz Araçları
+
+Projeye eklenmiş olan gelişmiş analiz hedefleri ile kodun dayanıklılığını ve kalitesini test edebilirsiniz. (Bu komutlar sisteminizde ilgili araçların kurulu olmasını gerektirir):
+
+*   **Bellek Sızıntısı Tespiti (Valgrind):**
+    ```bash
+    make valgrind
+    ```
+    Programı çalıştırır ve bellek yönetiminde sızıntı (memory leak) veya serbest bırakılmamış `malloc` olup olmadığını raporlar.
+
+*   **Eşzamanlılık (Race Condition) Kontrolü (Thread Sanitizer):**
+    ```bash
+    make tsan
+    ```
+
+    Kodu `-fsanitize=thread` bayrağıyla derler ve testleri TSan altında çalıştırır. Uygun Linux ortamında data race gibi eşzamanlılık hatalarını yakalamak için kullanılır.
+
+    Bu WSL2 ortamında test şu runtime hatasıyla tamamlanamadı:
+
+    ```text
+    FATAL: ThreadSanitizer: unexpected memory mapping
+    ```
+
+    Bu çıktı, kodda kesin bir data race bulunduğu anlamına gelmez. Eski raporda TSan `Pass` olarak kayıtlıdır; bu tekrar denemesinde ise testler başlamadan sanitizer runtime çöktüğü için güncel WSL2 sonucu ayrıca doğrulanamadı. Daha sağlıklı tekrar için native Linux, Linux VM veya farklı compiler/runtime kombinasyonu denenmelidir.
+
+*   **Kod Kapsamı Ölçümü (Gcov Coverage):**
+    ```bash
+    make coverage
+    ```
+    Testlerin kodun yüzde kaçına temas ettiğini ölçer. Komut tamamlandıktan sonra oluşturulan `.gcov` dosyalarını okuyarak çalışmayan/test edilmeyen kod satırlarını tespit edebilirsiniz.
+
+*   **Gereksiz Dosyaları Silme:**
+    ```bash
+    make clean
+    ```
+
+Elle denenebilecek örnek senaryolar:
+
+```bash
 ./threadpool_app --threads 4 --queue-size 32 --input tests/jobs_mixed.txt
 ./threadpool_app -t 4 -q 1 tests/jobs_mixed.txt
 ```
-
-Ayrıntılı test hedefleri ekip test dosyalarını tamamladıktan sonra Makefile içine eklenecektir.
 
 ## Performans Değerlendirmesi
 
@@ -138,7 +192,7 @@ Program sonunda şu bilgiler raporlanır:
 - Ortalama iş süresi
 - Saniye başına iş sayısı
 
-Daha ayrıntılı performans tablosu `docs/performance.md` içinde farklı worker sayılarıyla doldurulacaktır.
+Daha ayrıntılı test, coverage ve performans tablosu `docs/performance.md` içinde tutulur. Son ölçümde toplam coverage `%85.48` olarak raporlandı.
 
 ## Takım Rol Dağılımı
 
@@ -162,4 +216,4 @@ Bu branch'te özellikle şu hatalar ele alındı:
 
 ## Karşılaşılan Problemler
 
-Geliştirme sırasında en önemli riskler race condition, log satırlarının birbirine karışması ve hatalı girdilerin başarılı görev gibi görünmesiydi. Bu branch'te bu noktalar temel seviyede düzeltildi. Kalan işler daha çok test kapsamının genişletilmesi ve performans metriklerinin ayrıntılandırılması tarafındadır.
+Geliştirme sırasında en önemli riskler race condition, log satırlarının birbirine karışması ve hatalı girdilerin başarılı görev gibi görünmesiydi. Bu branch'te metrikler ve loglama mutex ile korunur hale getirildi, hatalı girdiler başarısız iş olarak sayıldı ve test kapsamı genişletildi. ThreadSanitizer için eski raporda `Pass` sonucu vardır; mevcut WSL2 ortamında tekrar doğrulama yapılamadığı için bu not ayrıca korunur.

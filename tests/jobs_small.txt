@@ -1,4 +1,0 @@
-PRIME 999983
-LINE_COUNT tests/sample1.txt
-FILE_HASH tests/sample2.txt
-PRIME 1234567
