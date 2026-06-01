@@ -122,10 +122,23 @@ make test_runner
 ./test_runner
 ```
 
+### Entegrasyon ve Stres Testleri
+
+Eğer uygulamanın `jobs_mixed.txt` ve `jobs_stress.txt` dosyalarıyla gerçek bir yük altında nasıl çalıştığını görmek isterseniz, hazır olarak eklenmiş stres testi komutunu kullanabilirsiniz:
+
+```bash
+make stress_test
+```
+Bu komut, uygulamayı farklı worker thread sayıları ve yoğun iş dosyalarındaki tüm görevleri işler. Uygulamanın performansını baştan sona analiz etmek için harika bir araçtır.
+
+```bash
+make mixed_jobs_test
+```
+Bu komut uygulamayı farklı worker thread sayıları ve karışık iş dosyalarındaki tüm görevleri işler. Uygulamanın performansını baştan sona analiz etmek için harika bir araçtır.
+
 Elle denenebilecek örnek senaryolar:
 
 ```bash
-./threadpool_app --input tests/jobs_small.txt
 ./threadpool_app --threads 4 --queue-size 32 --input tests/jobs_mixed.txt
 ./threadpool_app -t 4 -q 1 tests/jobs_mixed.txt
 ```

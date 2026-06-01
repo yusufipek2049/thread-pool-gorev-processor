@@ -13,7 +13,7 @@
 
 #define DEFAULT_WORKER_COUNT 4
 #define DEFAULT_QUEUE_SIZE 32
-#define MAX_JOBS 1024
+#define MAX_JOBS 100000
 
 static volatile sig_atomic_t g_interrupted = 0;
 
@@ -237,12 +237,18 @@ int main(int argc, char *argv[])
 {
     options_t options;
     thread_pool_t *pool = NULL;
-    job_t jobs[MAX_JOBS];
+    job_t *jobs = NULL;
     int job_count;
     int invalid_job_count = 0;
     int i;
     int result;
     int exit_code = 0;
+
+    jobs = malloc(MAX_JOBS * sizeof(job_t));
+    if (jobs == NULL) {
+        logger_error("Bellek ayrılamadı (görevler için)");
+        return 1;
+    }
 
     /* Sinyal yöneticisini kur */
     signal(SIGINT, signal_handler);
@@ -312,5 +318,6 @@ int main(int argc, char *argv[])
         logger_info("Program başarılı şekilde tamamlandı");
     }
 
+    free(jobs);
     return exit_code;
 }

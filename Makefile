@@ -32,5 +32,13 @@ test: $(TARGET) build_test
 	./$(TEST_TARGET)
 	./$(TARGET) -t 4 -q 32 -i tests/jobs_mixed.txt
 
+mixed_jobs_test: $(TARGET)
+	@echo "\n=== MIXED JOBS TEST ==="
+	./$(TARGET) -t 4 -q 32 -i tests/jobs_mixed.txt
+
+stress_test: $(TARGET)
+	@echo "\n=== STRESS JOBS TEST ==="
+	./$(TARGET) -t 8 -q 128 -i tests/jobs_stress.txt
+
 clean:
 	rm -f $(OBJ) $(TEST_OBJ) $(TARGET) $(TEST_TARGET)
