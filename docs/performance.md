@@ -5,7 +5,7 @@ Geliştirme aşamasında oluşturduğumuz farklı test senaryolarının (Unit, E
 ## 1. Unit Test Sonuçları (`make test_runner`)
 
 | Test Edilen Modül | Fonksiyon / Özellik | Başarı Durumu (Pass/Fail) |
-| :--- | :--- | :---: | :--- |
+| :---: | :---: | :--- |
 | `job_queue` | Kuyruğa ekleme (push) & alma (pop) | Pass |
 | `job_queue` | Tam kuyruk (full queue) koruması | Pass |
 | `job_queue` | Thread-safe yapısı | Pass |
@@ -28,7 +28,7 @@ Uygulamanın farklı iş yükleri (jobs dosyaları) ve worker thread sayıları 
 ### 2.2 Yoğun Stres Testi (`jobs_stress.txt` - 10.000 İşlem)
 
 | Worker Sayısı | Toplam İş | Başarılı | Başarısız | Toplam Süre | İş/Saniye |
-| :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| :---: | :---: | :---: | :---: | :---: | :--- |
 | 1 | 10000 | 10000 | 0 | 8.1588 | 1225.68 |
 | 2 | 10000 | 10000 | 0 | 7.9023 | 1265.45 |
 | 4 | 10000 | 10000 | 0 | 8.7080 | 1148.36 |
