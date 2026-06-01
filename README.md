@@ -134,7 +134,40 @@ Bu komut, uygulamayı farklı worker thread sayıları ve yoğun iş dosyaların
 ```bash
 make mixed_jobs_test
 ```
-Bu komut uygulamayı farklı worker thread sayıları ve karışık iş dosyalarındaki tüm görevleri işler. Uygulamanın performansını baştan sona analiz etmek için harika bir araçtır.
+Bu komut, uygulamayı farklı worker thread sayıları ve farklı kapasitelerde sırayla başlatarak küçük, karışık ve yoğun iş dosyalarındaki tüm görevleri işler. Uygulamanın performansını baştan sona analiz etmek için harika bir araçtır.
+
+### Gelişmiş Test ve Analiz Araçları
+
+Projeye eklenmiş olan gelişmiş analiz hedefleri ile kodun dayanıklılığını ve kalitesini test edebilirsiniz. (Bu komutlar sisteminizde ilgili araçların kurulu olmasını gerektirir):
+
+*   **Bellek Sızıntısı Tespiti (Valgrind):**
+    ```bash
+    make valgrind
+    ```
+    Programı çalıştırır ve bellek yönetiminde sızıntı (memory leak) veya serbest bırakılmamış `malloc` olup olmadığını raporlar.
+
+*   **Eşzamanlılık (Race Condition) Kontrolü (Thread Sanitizer):**
+    ```bash
+    make tsan
+    ```
+
+        * WSL'de kullanmak için *
+
+    ```bash
+    setarch $(uname -m) -R make tsan
+    ```
+    Kodu `gcc`'nin özel `-fsanitize=thread` bayrağıyla derler ve testleri çalıştırır. İki farklı thread aynı değişkene kilitsiz erişmeye çalışırsa (data race) veya deadlock yaşanırsa anında tespit eder.
+
+*   **Kod Kapsamı Ölçümü (Gcov Coverage):**
+    ```bash
+    make coverage
+    ```
+    Testlerin kodun yüzde kaçına temas ettiğini ölçer. Komut tamamlandıktan sonra oluşturulan `.gcov` dosyalarını okuyarak çalışmayan/test edilmeyen kod satırlarını tespit edebilirsiniz.
+    
+*   **Gereksiz Dosyaları Silme:**
+    ```bash
+    make clean
+    ```
 
 Elle denenebilecek örnek senaryolar:
 

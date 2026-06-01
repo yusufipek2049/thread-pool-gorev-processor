@@ -4,3 +4,8 @@ threadpool_app
 .vscode/
 .DS_Store
 test_runner
+
+# Coverage files
+*.gcov
+*.gcda
+*.gcno

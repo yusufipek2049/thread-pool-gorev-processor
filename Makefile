@@ -14,7 +14,7 @@ TEST_OBJ := $(TEST_SRC:.c=.o)
 all: $(TARGET)
 
 $(TARGET): $(OBJ)
-	$(CC) $(CFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 src/%.o: src/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -23,7 +23,7 @@ tests/%.o: tests/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 build_test: $(TEST_OBJ)
-	$(CC) $(CFLAGS) -o $(TEST_TARGET) $^
+	$(CC) $(CFLAGS) -o $(TEST_TARGET) $^ $(LDFLAGS)
 
 run: $(TARGET)
 	./$(TARGET)
@@ -40,5 +40,25 @@ stress_test: $(TARGET)
 	@echo "\n=== STRESS JOBS TEST ==="
 	./$(TARGET) -t 8 -q 128 -i tests/jobs_stress.txt
 
+valgrind: $(TARGET) build_test
+	@echo "\n=== RUNNING VALGRIND ==="
+	valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 ./$(TEST_TARGET)
+	valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 ./$(TARGET) -t 4 -q 32 -i tests/jobs_mixed.txt
+
+tsan: CFLAGS += -fsanitize=thread
+tsan: LDFLAGS += -fsanitize=thread
+tsan: clean $(TARGET) build_test
+	@echo "\n=== RUNNING THREAD SANITIZER ==="
+	./$(TEST_TARGET)
+	./$(TARGET) -t 4 -q 32 -i tests/jobs_mixed.txt
+
+coverage: CFLAGS += -fprofile-arcs -ftest-coverage
+coverage: LDFLAGS += -lgcov
+coverage: clean $(TARGET) build_test
+	@echo "\n=== RUNNING COVERAGE ==="
+	./$(TEST_TARGET)
+	./$(TARGET) -t 4 -q 32 -i tests/jobs_mixed.txt
+	gcov src/*.c
+
 clean:
-	rm -f $(OBJ) $(TEST_OBJ) $(TARGET) $(TEST_TARGET)
+	rm -f $(OBJ) $(TEST_OBJ) $(TARGET) $(TEST_TARGET) *.gcov *.gcda *.gcno
