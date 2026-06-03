@@ -15,5 +15,6 @@ int job_queue_is_empty(job_queue_t *queue);
 int job_queue_is_full(job_queue_t *queue);
 int job_queue_size(job_queue_t *queue);
 int job_queue_capacity(job_queue_t *queue);
+int job_queue_max_size(job_queue_t *queue);
 
 #endif
