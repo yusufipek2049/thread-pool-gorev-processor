@@ -7,6 +7,7 @@ struct job_queue {
     job_t *items;
     int capacity;
     int size;
+    int max_size;
     int front;
     int rear;
     pthread_mutex_t mutex;
@@ -33,6 +34,7 @@ job_queue_t *job_queue_create(int capacity)
 
     queue->capacity = capacity;
     queue->size = 0;
+    queue->max_size = 0;
     queue->front = 0;
     queue->rear = 0;
 
@@ -74,6 +76,9 @@ int job_queue_push(job_queue_t *queue, job_t job)
         queue->items[queue->rear] = job;
         queue->rear = (queue->rear + 1) % queue->capacity;
         queue->size++;
+        if (queue->size > queue->max_size) {
+            queue->max_size = queue->size;
+        }
     }
 
     if (pthread_mutex_unlock(&queue->mutex) != 0) {
@@ -180,4 +185,25 @@ int job_queue_capacity(job_queue_t *queue)
     }
 
     return queue->capacity;
+}
+
+int job_queue_max_size(job_queue_t *queue)
+{
+    int max_size = 0;
+
+    if (queue == NULL) {
+        return 0;
+    }
+
+    if (pthread_mutex_lock(&queue->mutex) != 0) {
+        return 0;
+    }
+
+    max_size = queue->max_size;
+
+    if (pthread_mutex_unlock(&queue->mutex) != 0) {
+        return 0;
+    }
+
+    return max_size;
 }

@@ -207,7 +207,7 @@ void thread_pool_shutdown(thread_pool_t *pool)
     }
 
     logger_info("All worker threads have finished");
-    metrics_print_report();
+    metrics_print_report(job_queue_max_size(pool->queue), job_queue_capacity(pool->queue));
 }
 
 void thread_pool_destroy(thread_pool_t *pool)
